@@ -188,15 +188,35 @@ export class ScheduleVisualizer extends EventEmitter {
                 }
             }else{
 
+                /**
+                 * Should not allow any travel duration.
+                 */
+
                 if(index>0){
 
                     var travelDuration=this._duration(datasets[index-1].endTime, dataset.startTime);
                     if(travelDuration!==0){
 
-                        //Snap {n-1}.endTime to {n}.startTime
+                        // Snap {n-1}.endTime to {n}.startTime
+                        // can either move {n-1}.endTime, or {n}.startTime
+
+                        var calcPreviousDuration=this._duration(datasets[index-1].startTime, dataset.startTime);
+                        
                         
 
                         if(currentIndex==index){
+
+                            
+
+                            /**
+                             * if setting time to PM from AM then it 
+                             * 
+                             * if {n}.startTime < {n-1}.startTime then 
+                             */
+
+
+
+
                             shouldBreak=true;
                             var inputEnd=this._list.getItemInput(index-1, 'endTime');
                             inputEnd.value=dataset.startTime
@@ -278,6 +298,14 @@ export class ScheduleVisualizer extends EventEmitter {
 
     }
 
+    _durationToHeight(d){
+        return Math.round(d/15)*10;
+    }
+
+    _heightToDuration(h){
+        return Math.round(h/10)*15;
+    }
+
     _addDurationIndicators(item, index, dataset, datasets){
 
         var duration=this._duration(dataset);
@@ -288,7 +316,7 @@ export class ScheduleVisualizer extends EventEmitter {
             "class":"duration"
         }))
 
-        var durationHeight=Math.round(duration/15)*10;
+        var durationHeight=this._durationToHeight(duration); //Math.round(duration/15)*10;
         durationEl.style.cssText = '--durationHeight:'+durationHeight+"px;";
 
 
@@ -366,6 +394,62 @@ export class ScheduleVisualizer extends EventEmitter {
             callback: (event) =>{
                 event.element.style.cssText = '';
             }
+        });
+
+        itemEndHandle.addEventListener('dragNdrop:start', ()=>{
+            item.classList.add('resizing');
+            item.parentNode.classList.add('rs');
+        });
+
+
+        var _y=0;
+        var _d=0;
+
+
+        var durationEl=item.querySelectorAll(".duration")[0];
+
+        itemEndHandle.addEventListener('dragNdrop:drag', ()=>{
+            
+            //z-index: 1000; cursor: row-resize; transform: translate3d(0px, 47px, 1px);
+            var offsets=itemEndHandle.style.cssText.split('translate3d(').pop().split(')').shift().split(',');
+            var y=parseInt(offsets[1]);
+
+            var height=Math.floor(y/15)*15;
+            y=height;
+            var d=this._heightToDuration(height);
+
+            
+
+
+            if(y!=_y&&(!isNaN(y))){
+
+                _y=y;
+                _d=d;
+                console.log(y);
+
+                item.style.cssText='--resizeHeight:'+_y+'px; --addDuration: "'+_d+'";';
+                if(_d<0){
+                    item.classList.add('rs-neg');
+                }else{
+                    item.classList.remove('rs-neg');
+                }
+            }
+        });
+
+        itemEndHandle.addEventListener('dragNdrop:stop', ()=>{
+            item.classList.remove('resizing');
+            item.classList.remove('rs-neg');
+            item.parentNode.classList.remove('rs');
+            item.style.cssText='';
+            console.log(_y);
+
+            var endTime=this._list.getItemInput(index, 'endTime');
+            endTime.value=this._offsetEnd(dataset.endTime, _d);
+            this._list.needsUpdate();
+
+            _y=0;
+
+
         });
 
     }
