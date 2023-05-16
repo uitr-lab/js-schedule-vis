@@ -23,7 +23,7 @@ export class ScheduleVisualizer extends EventEmitter {
         //    return key.replace(/\d+$/, "") //strip trailing numbers
         // });
         
-
+        
         this._list.on('addItem', this._setTimes.bind(this));
         this._list.getItems().forEach(this._setTimes.bind(this));
 
@@ -50,6 +50,10 @@ export class ScheduleVisualizer extends EventEmitter {
         var _isEmpty=(field)=>{
             return field.value==""||field.value=="select an option";
         }
+
+
+
+
 
 
         var inputStart=this._list.getItemInput(index, 'startTime');
