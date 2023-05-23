@@ -36,7 +36,11 @@ export class ScheduleVisualizer extends EventEmitter {
 
         this._element.parentNode.removeChild(this._element.previousSibling);
         this._list.on('update', ()=>{
-            this._redraw();
+            try{
+                this._redraw();
+            }catch(e){
+
+            }
         });
 
         this._redraw();
@@ -183,6 +187,11 @@ export class ScheduleVisualizer extends EventEmitter {
 
             if(this._hasTravel(index, dataset, datasets)){
                 var travelDuration=this._duration(datasets[index-1].endTime, dataset.startTime);
+
+                if(isNaN(travelDuration)){
+                    throw 'Invalid travel duration';
+                }
+
                 if(travelDuration<=0){
                     shouldBreak=true;
                     var inputStart=this._list.getItemInput(index, 'startTime');
@@ -199,6 +208,11 @@ export class ScheduleVisualizer extends EventEmitter {
                 if(index>0){
 
                     var travelDuration=this._duration(datasets[index-1].endTime, dataset.startTime);
+
+                    if(isNaN(travelDuration)){
+                        throw 'Invalid travel duration';
+                    }
+
                     if(travelDuration!==0){
 
                         // Snap {n-1}.endTime to {n}.startTime
@@ -452,7 +466,6 @@ export class ScheduleVisualizer extends EventEmitter {
             this._list.needsUpdate();
 
             _y=0;
-
 
         });
 
