@@ -39,7 +39,7 @@ export class ScheduleVisualizer extends EventEmitter {
             try{
                 this._redraw();
             }catch(e){
-
+                console.error(e);
             }
         });
 
