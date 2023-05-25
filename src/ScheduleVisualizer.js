@@ -18,7 +18,6 @@ export class ScheduleVisualizer extends EventEmitter {
 
 
         // This is already added
-
         // list.setDatasetKeyFormatter(function(key){
         //    return key.replace(/\d+$/, "") //strip trailing numbers
         // });
@@ -72,6 +71,7 @@ export class ScheduleVisualizer extends EventEmitter {
             }else{
                
                inputStart.value="03:00"; 
+               inputStart.classList.add('disabled');
                if(inputEnd.value===""){
                    inputEnd.value="06:30";
                }
@@ -138,6 +138,11 @@ export class ScheduleVisualizer extends EventEmitter {
 
         this._element.innerHTML='';
 
+
+        this._element.appendChild(new Element('span',{
+            "class":"intro"
+        }));
+
         var currentIndex=this._list.getCurrentIndex();
         this._active=null;
 
@@ -150,6 +155,23 @@ export class ScheduleVisualizer extends EventEmitter {
             if(shouldBreak){
                 return;
             }
+
+
+            if(index>0){
+                this._element.appendChild(new Element('button',{
+                    "html":"Insert Activity",
+                    "class":"add-item-btn insert-btn",
+                    events:{
+                        click:(e)=>{
+                            e.stopPropagation();
+                            e.preventDefault();
+
+                            this._list.insertItem(index);
+                        }
+                    }
+                }));
+            }
+
 
             var item=this._element.appendChild(new Element('div', {
                 "class":"schedule-item"+(currentIndex===index?" active":""),
@@ -185,7 +207,7 @@ export class ScheduleVisualizer extends EventEmitter {
 
 
 
-            if(this._hasTravel(index, dataset, datasets)){
+            if(this._canHaveTravelTime(index, dataset, datasets)){
                 var travelDuration=this._duration(datasets[index-1].endTime, dataset.startTime);
 
                 if(isNaN(travelDuration)){
@@ -220,7 +242,7 @@ export class ScheduleVisualizer extends EventEmitter {
 
                         var calcPreviousDuration=this._duration(datasets[index-1].startTime, dataset.startTime);
                         
-                        
+                        var inputStart=this._list.getItemInput(index, 'startTime');
 
                         if(currentIndex==index){
 
@@ -233,10 +255,24 @@ export class ScheduleVisualizer extends EventEmitter {
                              */
 
 
-
-
                             shouldBreak=true;
+
+                            if(inputStart===document.activeElement){
+                                this._delayUpdate(inputStart);
+                                return;
+                            }
+
                             var inputEnd=this._list.getItemInput(index-1, 'endTime');
+
+                            if(this._duration(datasets[index-1].startTime, dataset.startTime)<=0){
+
+                                alert('You cannot set the start time earlier than that of the previous activity');
+                                inputStart.value=datasets[index-1].endTime;
+                                this._list.needsUpdate();
+                                return;
+
+                            }
+
                             inputEnd.value=dataset.startTime
                             this._list.needsUpdate();
                             return;
@@ -244,7 +280,7 @@ export class ScheduleVisualizer extends EventEmitter {
 
 
                         shouldBreak=true;
-                        var inputStart=this._list.getItemInput(index, 'startTime');
+                        //var inputStart=this._list.getItemInput(index, 'startTime');
                         inputStart.value=datasets[index-1].endTime
                         this._list.needsUpdate();
                         return;
@@ -256,6 +292,9 @@ export class ScheduleVisualizer extends EventEmitter {
 
 
             }
+
+
+            
 
 
             var duration=this._duration(dataset);
@@ -271,9 +310,36 @@ export class ScheduleVisualizer extends EventEmitter {
         });
 
 
+        this._element.appendChild(new Element('button',{
+            "html":"Add Activity",
+            "class":"add-item-btn",
+            events:{
+                click:(e)=>{
+                    e.stopPropagation();
+                    e.preventDefault();
+
+                    this._list.addItem();
+                }
+            }
+        }));
+
+        this._element.appendChild(new Element('span',{
+         "class":"outro"
+        }));
+
     }
 
-    _hasTravel(index, dataset, datasets){
+    _delayUpdate(input){
+        var delayUpdateFn=()=>{
+           this._list.needsUpdate();
+        };
+        var removeListener=()=>{
+             input.removeEventListener('blur', delayUpdateFn);
+        }
+        input.addEventListener('blur', delayUpdateFn);
+    }
+
+    _canHaveTravelTime(index, dataset, datasets){
          return index>0&&datasets[index-1].locationType!==dataset.locationType;   
     }
 
@@ -374,6 +440,11 @@ export class ScheduleVisualizer extends EventEmitter {
 
         var start=_valueOf(dataset.startTime);
         var end=_valueOf(dataset.endTime);
+
+        if(start>12*60&&end<3*60){
+            // overflow the current day
+            end+=24*60;
+        }
 
         return end-start;
     }
