@@ -477,6 +477,10 @@ export class ScheduleVisualizer extends EventEmitter {
             "class":"drag-end"
         }));
 
+        item.addEventListener('touchmove', (e)=>{
+            //e.preventDefault();
+        })
+
         dragNdrop({
             element:itemEndHandle,
             constraints:'y',
