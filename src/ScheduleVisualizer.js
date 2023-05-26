@@ -486,7 +486,8 @@ export class ScheduleVisualizer extends EventEmitter {
             constraints:'y',
             callback: (event) =>{
                 event.element.style.cssText = '';
-            }
+            },
+            container:this._element
         });
 
         itemEndHandle.addEventListener('dragNdrop:start', ()=>{
