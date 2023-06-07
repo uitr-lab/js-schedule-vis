@@ -152,6 +152,8 @@ export class ScheduleVisualizer extends EventEmitter {
 
         datasets.forEach((dataset, index)=>{
 
+            var itemElement=this._list.getItemElement(index);
+
             if(shouldBreak){
                 return;
             }
@@ -193,7 +195,15 @@ export class ScheduleVisualizer extends EventEmitter {
 		
 			Object.keys(dataset).forEach((key)=>{
 				item.dataset[key]=dataset[key];
+
+                if(key.split('Time').pop()===''){
+                    item.dataset[key+'AmPm']=this._formatTime(dataset[key]);
+                    itemElement.dataset[key+'AmPm']=this._formatTime(dataset[key]);
+                }
+
 			});
+
+            item.dataset['index']=index;
 
 
 
@@ -301,6 +311,14 @@ export class ScheduleVisualizer extends EventEmitter {
             if(duration<=0){
                 shouldBreak=true;
                 var endTime=this._list.getItemInput(index, 'endTime');
+
+
+                if(endTime===document.activeElement){
+                    this._delayUpdate(endTime);
+                    return;
+                }
+
+
                 endTime.value=this._offsetEnd(dataset.startTime, 15);
                 this._list.needsUpdate();
                 return;
@@ -326,6 +344,25 @@ export class ScheduleVisualizer extends EventEmitter {
         this._element.appendChild(new Element('span',{
          "class":"outro"
         }));
+
+    }
+
+    _formatTime(str){
+
+        var hours=parseInt(str.split(':').shift());
+        var mins=parseInt(str.split(':').pop());
+
+        var hourStr=hours;
+        if(hours===0){
+            hourStr="12";
+        }
+
+        if(hours>12){
+            hourStr=hours-12;
+        }
+
+
+        return hourStr+":"+(mins<10?"0":"")+mins+(hours<12?'AM':'PM');
 
     }
 
