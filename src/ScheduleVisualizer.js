@@ -17,7 +17,7 @@ export class ScheduleVisualizer extends EventEmitter {
         this._list=list;
 
 
-        // This is already added
+        // This is already added in index.html for my survey
         // list.setDatasetKeyFormatter(function(key){
         //    return key.replace(/\d+$/, "") //strip trailing numbers
         // });
@@ -106,7 +106,7 @@ export class ScheduleVisualizer extends EventEmitter {
 
         if(_isEmpty(inputEnd)){
 
-            inputEnd.value=this._offsetEnd(inputStart.value, 30);
+            inputEnd.value=this._snapOffsetEnd(inputStart.value, 30);
 
         }
 
@@ -115,7 +115,11 @@ export class ScheduleVisualizer extends EventEmitter {
 
     }
 
-    _offsetEnd(value, addOffset){
+    _snapOffsetEnd(value, addOffset, snap){
+
+        if(typeof snap=="undefined"){
+            snap=addOffset;
+        }
 
         var _pad=(n)=>{
             n=n+"";
@@ -126,7 +130,7 @@ export class ScheduleVisualizer extends EventEmitter {
         };
 
         var m=(parseInt(value.split(':').shift())*60)+parseInt(value.split(':').pop());
-        m=(Math.round(m/addOffset)*addOffset)+addOffset;
+        m=(Math.round(m/snap)*snap)+addOffset;
 
        return _pad(Math.floor(m/60))+':'+_pad(m%60);
 
@@ -227,7 +231,7 @@ export class ScheduleVisualizer extends EventEmitter {
                 if(travelDuration<=0){
                     shouldBreak=true;
                     var inputStart=this._list.getItemInput(index, 'startTime');
-                    inputStart.value=this._offsetEnd(datasets[index-1].endTime, 15);
+                    inputStart.value=this._snapOffsetEnd(datasets[index-1].endTime, 15);
                     this._list.needsUpdate();
                     return;
                 }
@@ -319,7 +323,7 @@ export class ScheduleVisualizer extends EventEmitter {
                 }
 
 
-                endTime.value=this._offsetEnd(dataset.startTime, 15);
+                endTime.value=this._snapOffsetEnd(dataset.startTime, 15);
                 this._list.needsUpdate();
                 return;
             }
@@ -345,6 +349,22 @@ export class ScheduleVisualizer extends EventEmitter {
          "class":"outro"
         }));
 
+    }
+
+    _formatDuratation(minutes){
+
+        /**
+         * returns a string like: [-]{H}h {M}min or [-]{M}min ie: -1h 15min
+         */
+
+        var h= Math.floor(minutes/60);
+        var m=minutes%60;
+
+        if(h==0){
+            return m+"min";
+        }
+
+        return h+"h "+Math.abs(m)+"min";
     }
 
     _formatTime(str){
@@ -489,6 +509,8 @@ export class ScheduleVisualizer extends EventEmitter {
     _addDragTimeHandles(item, index, dataset, datasets){
 
 
+        var snap=15;
+
         if(index>0&&datasets[index-1].locationType!==dataset.locationType){
 
             /**
@@ -545,11 +567,13 @@ export class ScheduleVisualizer extends EventEmitter {
             var offsets=itemEndHandle.style.cssText.split('translate3d(').pop().split(')').shift().split(',');
             var y=parseInt(offsets[1]);
 
-            var height=Math.floor(y/15)*15;
+            
+
+            var height=Math.floor(y/snap)*snap;
             y=height;
             var d=this._heightToDuration(height);
 
-            
+           
 
 
             if(y!=_y&&(!isNaN(y))){
@@ -557,8 +581,35 @@ export class ScheduleVisualizer extends EventEmitter {
                 _y=y;
                 _d=d;
                 console.log(y);
+                var _end=this._snapOffsetEnd(dataset.endTime, d, snap);
 
-                item.style.cssText='--resizeHeight:'+_y+'px; --addDuration: "'+_d+'";';
+                if(_d==0){
+                    item.classList.add('z-dur');
+                    
+                    item.classList.remove('dur-1');
+                    item.classList.remove('dur--1');
+                }else if(_d==snap){
+                    item.classList.add('dur-1');
+
+                    item.classList.remove('z-dur');
+                    item.classList.remove('dur--1');
+                }else if(_d==-snap){
+                    item.classList.add('dur--1');
+
+                    item.classList.remove('z-dur');
+                    item.classList.remove('dur-1');
+                }else{
+                    item.classList.remove('z-dur');
+                    item.classList.remove('dur-1');
+                    item.classList.remove('dur--1');
+                }
+
+
+                if(_d==0){
+                    item.classList.add('z-dur');
+                }
+
+                item.style.cssText='--resizeHeight:'+_y+'px; --addDuration: "'+this._formatDuratation(_d)+'"; --dragEndTime: "'+this._formatTime(_end)+'";';
                 if(_d<0){
                     item.classList.add('rs-neg');
                 }else{
@@ -575,7 +626,7 @@ export class ScheduleVisualizer extends EventEmitter {
             console.log(_y);
 
             var endTime=this._list.getItemInput(index, 'endTime');
-            endTime.value=this._offsetEnd(dataset.endTime, _d);
+            endTime.value=this._snapOffsetEnd(dataset.endTime, _d, snap);
             this._list.needsUpdate();
 
             _y=0;
