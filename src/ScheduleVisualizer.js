@@ -32,8 +32,8 @@ export class ScheduleVisualizer extends EventEmitter {
             "class":"schedule-vis"
         }), list.getElement());
 
-
-        this._element.parentNode.removeChild(this._element.previousSibling);
+        
+        this._element.parentNode.removeChild(this._element.previousSibling);     
         this._list.on('update', ()=>{
             try{
                 this._redraw();
