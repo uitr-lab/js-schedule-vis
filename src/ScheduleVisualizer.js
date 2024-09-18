@@ -14,6 +14,11 @@ export class ScheduleVisualizer extends EventEmitter {
 	constructor(list){
 		super();
 
+        this._minDuration=15;
+        this._initialItem={
+
+        };
+
         this._list=list;
 
 
@@ -70,7 +75,7 @@ export class ScheduleVisualizer extends EventEmitter {
                 inputStart.value=lastEnd.value;
             }else{
                
-               inputStart.value="03:00"; 
+               inputStart.value="04:00"; 
                inputStart.classList.add('disabled');
                if(inputEnd.value===""){
                    inputEnd.value="06:30";
@@ -201,6 +206,11 @@ export class ScheduleVisualizer extends EventEmitter {
 				item.dataset[key]=dataset[key];
 
                 if(key.split('Time').pop()===''){
+                    //ends with 'Time'
+                    if((!dataset[key])||dataset[key]===""){
+                        return; //incase empty value - avoid NAN
+                    }
+
                     item.dataset[key+'AmPm']=this._formatTime(dataset[key]);
                     itemElement.dataset[key+'AmPm']=this._formatTime(dataset[key]);
                 }
@@ -366,7 +376,7 @@ export class ScheduleVisualizer extends EventEmitter {
 
         return h+"h "+Math.abs(m)+"min";
     }
-
+    
     _formatTime(str){
 
         var hours=parseInt(str.split(':').shift());
@@ -440,6 +450,7 @@ export class ScheduleVisualizer extends EventEmitter {
     }
 
     _durationToHeight(d){
+        
         return Math.round(d/15)*10;
     }
 
@@ -471,6 +482,14 @@ export class ScheduleVisualizer extends EventEmitter {
 
             travelDurationEl.dataset['travel']=travelDuration;
 
+            if(travelDuration>60){
+                var hourDur=Math.floor(travelDuration/60)+"h";
+                if(travelDuration%60>0){
+                    hourDur+=" "+(travelDuration%60)+"m";
+                }
+                travelDurationEl.dataset['travelHr']=hourDur;
+            }
+
         }
 
     }
@@ -481,8 +500,13 @@ export class ScheduleVisualizer extends EventEmitter {
             var h=parseInt(value.split(':').shift());
             var m=parseInt(value.split(':').pop());
 
-            return h*60+m;
+            var num=h*60+m;
 
+            if(isNaN(num)){
+                return 0;
+            }
+
+            return num;
         }
 
         var dataset=startTime;
@@ -498,10 +522,15 @@ export class ScheduleVisualizer extends EventEmitter {
         var start=_valueOf(dataset.startTime);
         var end=_valueOf(dataset.endTime);
 
-        if(start>12*60&&end<3*60){
-            // overflow the current day
+        if(start>end){
+            console.log('overflows day');
             end+=24*60;
         }
+
+        // if(start>12*60&&end<5*60){
+        //     // overflow the current day
+        //     end+=24*60;
+        // }
 
         return end-start;
     }
