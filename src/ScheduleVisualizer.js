@@ -141,11 +141,84 @@ export class ScheduleVisualizer extends EventEmitter {
 
     }
 
+    _empty(){
+        this._element.innerHTML='';
+    }
 
+    _addInsert(index){
+
+        this._element.appendChild(new Element('button',{
+            "html":"Insert Activity",
+            "class":"add-item-btn insert-btn",
+            events:{
+                click:(e)=>{
+                    e.stopPropagation();
+                    e.preventDefault();
+                    this._list.insertItem(index);
+                }
+            }
+        }));
+    }
+
+    _addAppend(){
+        this._element.appendChild(new Element('button',{
+            "html":"Add Activity",
+            "class":"add-item-btn",
+            events:{
+                click:(e)=>{
+                    e.stopPropagation();
+                    e.preventDefault();
+
+                    this._list.addItem();
+                }
+            }
+        }));
+    }
+
+
+    _addItem(index, dataset, datasets){
+        var item = this._element.appendChild(new Element('div', {
+            "class":"schedule-item",
+            "events":{
+                "click":()=>{
+                    this._list.setCurrentIndex(index);
+                    item.classList.add("active");
+                    if(this._active){
+                        this._active.classList.remove("active");
+                    }
+                }
+            }
+        }));
+
+
+        Object.keys(dataset).forEach((key)=>{
+            item.dataset[key]=dataset[key];
+
+            if(key.split('Time').pop()===''){
+                //ends with 'Time'
+                if((!dataset[key])||dataset[key]===""){
+                    return; //incase empty value - avoid NAN
+                }
+
+                item.dataset[key+'AmPm']=this._formatTime(dataset[key]);
+                itemElement.dataset[key+'AmPm']=this._formatTime(dataset[key]);
+            }
+
+        });
+
+        item.dataset['index']=index;
+
+        this._addTransitIndicators(item, index, dataset, datasets);
+        this._addDurationIndicators(item, index, dataset, datasets);
+        this._addActivityLabel(item, index, dataset);
+        this._addDragTimeHandles(item, index, dataset, datasets);
+
+        return item;
+    }
 
     _redraw(){
 
-        this._element.innerHTML='';
+        this._empty();
 
 
         this._element.appendChild(new Element('span',{
@@ -169,66 +242,16 @@ export class ScheduleVisualizer extends EventEmitter {
 
 
             if(index>0){
-                this._element.appendChild(new Element('button',{
-                    "html":"Insert Activity",
-                    "class":"add-item-btn insert-btn",
-                    events:{
-                        click:(e)=>{
-                            e.stopPropagation();
-                            e.preventDefault();
-
-                            this._list.insertItem(index);
-                        }
-                    }
-                }));
+                this._addInsert(index);
             }
 
-
-            var item=this._element.appendChild(new Element('div', {
-                "class":"schedule-item"+(currentIndex===index?" active":""),
-                "events":{
-                    "click":()=>{
-                        this._list.setCurrentIndex(index);
-                        item.classList.add("active");
-                        if(this._active){
-                            this._active.classList.remove("active");
-                        }
-                    }
-                }
-            }));
+            var item=_addItem(index, dataset, datasets);
 
             if(currentIndex===index){
                 item.classList.add("active");
                 this._active=item;
             }
 		
-			Object.keys(dataset).forEach((key)=>{
-				item.dataset[key]=dataset[key];
-
-                if(key.split('Time').pop()===''){
-                    //ends with 'Time'
-                    if((!dataset[key])||dataset[key]===""){
-                        return; //incase empty value - avoid NAN
-                    }
-
-                    item.dataset[key+'AmPm']=this._formatTime(dataset[key]);
-                    itemElement.dataset[key+'AmPm']=this._formatTime(dataset[key]);
-                }
-
-			});
-
-            item.dataset['index']=index;
-
-
-
-            this._addTransitIndicators(item, index, dataset, datasets);
-            this._addDurationIndicators(item, index, dataset, datasets);
-            this._addActivityLabel(item, index, dataset);
-            this._addDragTimeHandles(item, index, dataset, datasets);
-
-
-           
-
 
 
             if(this._canHaveTravelTime(index, dataset, datasets)){
@@ -342,18 +365,7 @@ export class ScheduleVisualizer extends EventEmitter {
         });
 
 
-        this._element.appendChild(new Element('button',{
-            "html":"Add Activity",
-            "class":"add-item-btn",
-            events:{
-                click:(e)=>{
-                    e.stopPropagation();
-                    e.preventDefault();
-
-                    this._list.addItem();
-                }
-            }
-        }));
+        this._addAppend()
 
         this._element.appendChild(new Element('span',{
          "class":"outro"
