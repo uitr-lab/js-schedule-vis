@@ -38,7 +38,7 @@ export class Calc {
 
 
 
-    formatDuratation(minutes){
+    formatDuration(minutes){
 
         /**
          * returns a string like: [-]{H}h {M}min or [-]{M}min ie: -1h 15min
@@ -78,5 +78,47 @@ export class Calc {
         return hourStr+":"+(mins<10?"0":"")+mins+(hours<12?'AM':'PM');
 
     }
+
+
+    duration(startTime, endTime){
+        var _valueOf=(value)=>{
+
+           var h=parseInt(value.split(':').shift());
+           var m=parseInt(value.split(':').pop());
+
+           var num=h*60+m;
+
+           if(isNaN(num)){
+               return 0;
+           }
+
+           return num;
+       }
+
+       var dataset=startTime;
+
+       if(typeof startTime=='string'&&typeof endTime=='string'){
+            dataset={
+                startTime:dataset,
+                endTime:endTime
+            };
+       }
+
+
+       var start=_valueOf(dataset.startTime);
+       var end=_valueOf(dataset.endTime);
+
+       if(start>end){
+           console.log('overflows day');
+           end+=24*60;
+       }
+
+       // if(start>12*60&&end<5*60){
+       //     // overflow the current day
+       //     end+=24*60;
+       // }
+
+       return end-start;
+   }
 
 }
