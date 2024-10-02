@@ -33,6 +33,10 @@ export class Calc {
         };
 
         var m=(parseInt(value.split(':').shift())*60)+parseInt(value.split(':').pop())+addOffset;
+        if(m>1440){
+            console.log('overflow');
+        }
+        m=m%1440;
         return _pad(Math.floor(m/60))+':'+_pad(m%60);
     }
 
