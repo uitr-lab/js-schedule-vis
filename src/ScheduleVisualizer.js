@@ -3,6 +3,10 @@ import  { Element } from  './Element.js';
 import  { Calc } from  './Calc.js';
 
 import  { ScheduleItem } from  './ScheduleItem.js';
+import  { ScheduleProgressBar } from  './ScheduleProgressBar.js';
+
+
+ScheduleProgressBar
 
 import * as dragNdrop from 'npm-dragndrop/src/dragNdrop.js';
 
@@ -17,6 +21,7 @@ export class ScheduleVisualizer extends EventEmitter {
 		super();
 
         this._minDuration=15;
+        this._minTravelTime=15;
         this._initialItem={
 
         };
@@ -24,12 +29,22 @@ export class ScheduleVisualizer extends EventEmitter {
         this._list=list;
         this._items=[];
 
+        this._active=null;
+
         // This is already added in index.html for my survey
         // list.setDatasetKeyFormatter(function(key){
         //    return key.replace(/\d+$/, "") //strip trailing numbers
         // });
-        
+        this._navigationEnabled=true;
         this._list.autoValidate();
+        this._list.on('validation', ()=>{
+            this._enableNavigation();
+        })
+
+        this._list.on('failedValidation', ()=>{
+            console.log('failed')
+            this._disableNavigation();
+        })
         
         this._list.on('addItem', this._setTimes.bind(this));
         this._list.getItems().forEach(this._setTimes.bind(this));
@@ -44,13 +59,35 @@ export class ScheduleVisualizer extends EventEmitter {
         this._element.parentNode.removeChild(this._element.previousSibling);     
         this._list.on('update', ()=>{
             try{
-                this._redraw();
+                this._formatActivities();
             }catch(e){
                 console.error(e);
             }
         });
 
-        this._redraw();
+
+        this._list.on('select', (i)=>{
+            this.emit('select', i);
+        });
+
+        this._list.getPage().addValidator((formData, pageData, opts)=>{
+            return new Promise((resolve)=>{
+                if(this.calcFullDurationTo(this._lastValidDatasets.length)>20*60){
+                    resolve();
+                    return;
+                }
+                throw {errors:['Need to complete a full day'], fields:['activitySchedule']};
+            })
+        })
+        this._updateSidebar();
+        this._formatActivities();
+        this.on('update', ()=>{
+            this._updateSidebar();
+        });
+
+        (new ScheduleProgressBar(list.getElement(), this));
+        
+
 	}
 
 
@@ -136,21 +173,51 @@ export class ScheduleVisualizer extends EventEmitter {
 
 
     insertItem(index){
+
+        if(!this._navigationEnabled){
+            this._navigationFailedFeedback(index);
+            return
+        }
+     
         this._list.insertItem(index);
+        
     }
 
     appendItem(){
+
+        if(!this._navigationEnabled){
+            this._navigationFailedFeedback(index);
+            return
+        }
+        
         this._list.addItem();
+        
     }
 
 
     setCurrentIndex(index){
+
+        if(!this._navigationEnabled){
+            this._navigationFailedFeedback(index);
+            if(this._list.isIndexValid(index)){
+                // allow user to go to invalid indexes!
+                return
+            }
+            
+        }
+        
+        this._setCurrentIndex(index);
+        
+    }
+
+    _setCurrentIndex(index){
         this._list.setCurrentIndex(index);
         var item=this._items[index].getElement();
         item.classList.add("active");
-        if(this._active){
+        if(this._active&&this._active!==item){
             this._active.classList.remove("active");
         }
+        this._active=item;
     }
 
 
@@ -162,22 +229,17 @@ export class ScheduleVisualizer extends EventEmitter {
     getItemInput(index, fieldName){
         return this._list.getItemInput(index, fieldName);
     }
+
+    getCurrentIndex(){
+        return this._list.getCurrentIndex();
+    }
     
 
-    _redraw(){
-        this._isRendering=true;
-        // this._empty();
-        this._needsRedraw=false;
+    _updateSidebar(){
 
         this._addIntro()
         
-
-        var currentIndex=this._list.getCurrentIndex();
-        this._active=null;
-
         var datasets=this._list.getItemsData();
-
-        var shouldBreak=false;
 
         while(this._items.length>datasets.length){
             var removedScheduleItem=this._items.pop();
@@ -186,11 +248,8 @@ export class ScheduleVisualizer extends EventEmitter {
         
         datasets.forEach((dataset, index)=>{
 
-            var preserveDuration=true;
 
-            if(shouldBreak){
-                return;
-            }
+
            
             var item;
             var scheduleItem;
@@ -205,27 +264,63 @@ export class ScheduleVisualizer extends EventEmitter {
             }
             
             
-
-            if(currentIndex===index){
-                item.classList.add("active");
-                this._active=item;
+            if(this.getCurrentIndex()===index){
+                this._setCurrentIndex(index);
             }
+        });
+
+
+        this._addOutro();
+    }
+
+    _formatActivities(){
+        this._isRendering=true;
+        // this._empty();
+        this._needsRedraw=false;
+
+        
+
+        
+
+        var datasets=this._list.getItemsData();
+        this._changedAnyItem=false;
+        
+        datasets.forEach((dataset, index)=>{
+
+            var preserveDuration=true;
+
+            if(this._changedAnyItem){
+                return;
+            }
+        
+
+            /*
+             * Adjust activity times
+             */
 		
 
 
-            if(currentIndex===index){
+            if(this.getCurrentIndex()===index){
 
                 if(this._lastValidDatasets){
                     if(this._isEditing(index, 'startTime')){
+
+
+                        this._autoSwitchAmPMStartTime(index, dataset, datasets);
+
                         if(preserveDuration&&this._lastValidDatasets){
                             this._restoreLastDuration(index, datasets)
                         }
+                        this._changedAnyItem=true;
                         this._delayUpdate(index, 'startTime');
                         return;
                     }
 
                     if(this._isEditing(index, 'endTime')){
-                        shouldBreak=true;
+
+                        this._autoSwitchAmPMEndTime(index, dataset, datasets);
+
+                        this._changedAnyItem=true;
                         this._delayUpdate(index, 'endTime');
                         return;
                     }
@@ -234,14 +329,21 @@ export class ScheduleVisualizer extends EventEmitter {
 
             if(index==0){
                 if(this._clampDuration(index, datasets, this._minDuration, 16*60)){
-                    shouldBreak=true;
+                    this._changedAnyItem=true;
                     this._scheduleRedraw();
                     return;
                 }
             }
 
+            var duration=this._duration(dataset);
+            if(duration<=0){
+                this._changedAnyItem=true;
+                this._adjustEmptyItem(index, datasets);
+                return;
+            }
 
-            if(this._canHaveTravelTime(index, dataset, datasets)){
+
+            if(this.canHaveTravelTime(index, datasets)){
                 var travelDuration=this._duration(datasets[index-1].endTime, dataset.startTime);
 
                 if(isNaN(travelDuration)){
@@ -249,12 +351,33 @@ export class ScheduleVisualizer extends EventEmitter {
                 }
 
                 if(travelDuration<=0){
-                    shouldBreak=true;
+                    this._changedAnyItem=true;
 
                     this._clampStartTimeToPrevious(index, this._minDuration, datasets)
                     this._scheduleRedraw();
                     return;
                 }
+
+                if(this.getCurrentIndex()<index&&this._lastValidDatasets){
+
+                    var lastTravelTime=this._duration(this._lastValidDatasets[index-1].endTime, this._lastValidDatasets[index].startTime);
+                    var newStartTime=this._clampStartTimeToPrevious(index, Math.max(lastTravelTime, this._minTravelTime), datasets);
+                    
+                    if(newStartTime!==dataset.startTime){
+                    
+                        if(preserveDuration){
+                            this._preserveDuration(index, newStartTime, datasets);
+                        }
+                        this.emit('autoresize', index);
+                        this._scheduleRedraw();
+                        return;
+
+                    }
+
+
+                }
+
+
             }else{
 
                 /**
@@ -271,20 +394,26 @@ export class ScheduleVisualizer extends EventEmitter {
 
                     if(travelDuration!==0){
 
-                        if(currentIndex!=index){
+                        if(this.getCurrentIndex()!=index){
 
 
-                             shouldBreak=true;
-                            //var inputStart=this.getItemInput(index, 'startTime');
+                             this._changedAnyItem=true;
+                           
+                            
+                           
                         
                             var newStartTime=this._clampStartTimeToPrevious(index, 0, datasets);
                             
-                            if(preserveDuration){
-                                this._preserveDuration(index, newStartTime, datasets);
-                            }
+                            if(newStartTime!==dataset.startTime){
+                            
+                                if(preserveDuration){
+                                    this._preserveDuration(index, newStartTime, datasets);
+                                }
+                                this.emit('autoresize', index);
+                                this._scheduleRedraw();
+                                return;
 
-                            this._scheduleRedraw();
-                            return;
+                            }
                         }
                             
 
@@ -295,7 +424,7 @@ export class ScheduleVisualizer extends EventEmitter {
                          */
 
 
-                        shouldBreak=true;
+                        this._changedAnyItem=true;
 
                         if(this._isEditing(index, 'startTime')){
                             if(preserveDuration&&this._lastValidDatasets){
@@ -333,18 +462,18 @@ export class ScheduleVisualizer extends EventEmitter {
             }
 
 
-            var duration=this._duration(dataset);
-            if(duration<=0){
-                shouldBreak=true;
-                this._adjustEmptyItem(index);
-                return;
-            }
+            
+
+
+            /*
+             * End of - adjust actvity times
+             */
 
 
         });
 
         if(this._needsRedraw===true){
-            this._redraw();
+            this._formatActivities();
             return;
         }
 
@@ -358,11 +487,125 @@ export class ScheduleVisualizer extends EventEmitter {
         }
         
         // keep last valid
-        this._lastValidDatasets=JSON.parse(JSON.stringify(datasets));
+        var lastValid=JSON.parse(JSON.stringify(datasets));
+        if(JSON.stringify(this._lastValidDatasets)!==JSON.stringify(lastValid)){
+            this._lastValidDatasets=lastValid;
+            this.emit('update', lastValid);
+            this._list.needsUpdate();
+        }
+        
+    }
+
+
+    calcFullDurationTo(index, datasets){
+
+
+        if(!datasets){
+            datasets=this._lastValidDatasets;
+        }
+
+        if(index==0){
+            return 0;
+        }
+
+        var total=this._duration(datasets[0])
+        for(var i=1;i<Math.min(datasets.length, index);i++){
+            total+=this._duration(datasets[i-1].endTime, i+1==datasets.length?datasets[i].endTime:datasets[i+1].startTime);
+        }
+        return total;
 
     }
 
-    _adjustEmptyItem(index){
+    calcDurationOf(index, datasets){
+
+
+        if(!datasets){
+            datasets=this._lastValidDatasets;
+        }
+
+        return this._duration(datasets[index].startTime, datasets[index].endTime);
+
+    }
+
+    calcTravelTimeOf(index, datasets){
+
+
+        if(!datasets){
+            datasets=this._lastValidDatasets;
+        }
+
+        if(index==0){
+            return 0;
+        }
+
+        this._duration(datasets[index-1].endTime, datasets[index].startTime);
+
+    }
+
+
+
+    _autoSwitchAmPMStartTime(index, dataset, datasets){
+
+        var switchedStartTime=this._addOffset(dataset.startTime, 12*60);
+        if(parseInt(switchedStartTime.split(':').shift())>23){
+            switchedStartTime=this._addOffset(switchedStartTime, -24*60);
+        }
+
+
+        var changedBy=(this._duration(this._lastValidDatasets[index].startTime, dataset.startTime))/60;
+        if(changedBy==12){
+            //user adjusted AM PM manually
+            return;
+        }
+
+
+        var currentPreviousBlock=this._duration(datasets[index-1].startTime, dataset.startTime)/60
+        var switchedPreviousBlock=this._duration(datasets[index-1].startTime, switchedStartTime)/60
+        var lastPreviousBlock=this._duration(this._lastValidDatasets[index-1].startTime, this._lastValidDatasets[index].startTime)/60
+        
+
+        var currentChange=currentPreviousBlock-lastPreviousBlock;
+        var switchedChange=switchedPreviousBlock-lastPreviousBlock;
+
+
+        if(switchedChange<currentChange){
+            this.getItemInput(index, 'startTime').value=switchedStartTime;
+        }
+
+    }
+
+    _autoSwitchAmPMEndTime(index, dataset, datasets){
+        
+        
+        var switchedEndTime=this._addOffset(dataset.endTime, 12*60);
+        if(parseInt(switchedEndTime.split(':').shift())>23){
+            switchedEndTime=this._addOffset(switchedEndTime, -24*60);
+        }
+
+
+        var changedBy=(this._duration(this._lastValidDatasets[index].endTime, dataset.endTime))/60;
+        if(changedBy==12){
+            //user adjusted AM PM manually
+            return;
+        }
+
+
+        var currentDuration=this._duration(dataset.startTime, dataset.endTime)/60
+        var switchedDuration=this._duration(dataset.startTime, switchedEndTime)/60
+        var lastDuration=this._duration(this._lastValidDatasets[index].startTime, this._lastValidDatasets[index].endTime)/60
+        
+
+        var currentChange=currentDuration-lastDuration;
+        var switchedChange=switchedDuration-lastDuration;
+
+        
+        if(switchedChange<currentChange){
+            this.getItemInput(index, 'endTime').value=switchedEndTime;
+        }
+
+    }
+
+    _adjustEmptyItem(index, datasets){
 
         var preserveDuration=true;
 
@@ -432,7 +675,8 @@ export class ScheduleVisualizer extends EventEmitter {
         var lastDuration=this._duration(this._lastValidDatasets[index]);
         // var currentDuration=this._duration(dataset);
         var inputEnd=this.getItemInput(index, 'endTime');
-        inputEnd.value=this._addOffset(datasets[index].startTime, lastDuration);
+        var inputStart=this.getItemInput(index, 'startTime');
+        inputEnd.value=this._addOffset(inputStart.value/*datasets[index].startTime*/, lastDuration);
     }
     
 
@@ -444,9 +688,25 @@ export class ScheduleVisualizer extends EventEmitter {
         this._list.needsUpdate();
         if(!this._isRendering){
             setTimeout(()=>{
-                this._redraw();
+                this._formatActivities();
             }, 10);
         }
+    }
+
+    needsRedrawOnDragend(){
+
+        var alertResize=()=>{
+
+            alert('Some activities start and end dates have been automatically adjusted');
+
+        };
+
+        this.once('autoresize', alertResize);
+        this.once('update', ()=>{
+            this.off('autoresize', alertResize);
+        });
+
+        this.needsRedraw();
     }
 
 
@@ -477,8 +737,28 @@ export class ScheduleVisualizer extends EventEmitter {
         input.addEventListener('blur', delayUpdateFn);
     }
 
-    _canHaveTravelTime(index, dataset, datasets){
-         return index>0&&datasets[index-1].locationType!==dataset.locationType;   
+    canHaveTravelTime(index, datasets){
+
+        if(!datasets){
+            datasets=this._lastValidDatasets;
+        }
+
+        if(index==0){
+            return false;
+        }
+
+        if(datasets[index-1].locationType!==datasets[index].locationType){
+            return true;
+        }
+
+        if(datasets[index].locationOtherText&&
+            datasets[index-1].locationOtherText!==datasets[index].locationOtherText){
+
+            return true;
+        }
+
+
+        return false;
     }
 
 
@@ -506,6 +786,23 @@ export class ScheduleVisualizer extends EventEmitter {
             this._element.appendChild(this._outro);
         }
 
+    }
+
+
+    _enableNavigation(){
+        this._navigationEnabled=true;
+        this._element.classList.remove('disable-nav');
+
+    }
+    _disableNavigation(){
+        this._navigationEnabled=false;
+        this._element.classList.add('disable-nav');
+    }
+
+
+    _navigationFailedFeedback(){
+        this._list.showErrors();
+        
     }
 
 }
