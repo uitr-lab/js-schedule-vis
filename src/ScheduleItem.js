@@ -8,9 +8,7 @@ export class ScheduleItem {
 	constructor(element, visualizer){
         this._container=element;
         this._visualizer=visualizer;
-
-        this._minDuration=15;
-        
+        this._minDuration=15;        
     }
 
     getElement(){
@@ -20,10 +18,7 @@ export class ScheduleItem {
 
     remove(){
         this._container.removeChild(this._item);
-        delete this._container;
-        delete this._visualizer;
-        delete this._dataset;
-        delete this._datasets;
+
 
         if(this._insert){
             this._container.removeChild(this._insert);
@@ -34,6 +29,11 @@ export class ScheduleItem {
             this._container.removeChild(this._append);
             delete this._append;
         }
+
+        delete this._container;
+        delete this._visualizer;
+        delete this._dataset;
+        delete this._datasets;
 
     }
 
@@ -84,8 +84,6 @@ export class ScheduleItem {
         item.style.cssText='';
         item.innerHTML='';
 
-        var itemElement=this._visualizer.getItemElement(index);
-
         Object.keys(item.dataset).forEach((key) => {
             delete item.dataset[key];          
         });
@@ -122,6 +120,14 @@ export class ScheduleItem {
             }
 
         });
+
+        if(this._visualizer.canHaveTravelTime(index, datasets)){
+            item.dataset['canHaveTravel']='yes';
+            itemElement.dataset['canHaveTravel']='yes';
+        }else{
+            item.dataset['canHaveTravel']='no';
+            itemElement.dataset['canHaveTravel']='no';
+        }
 
         item.dataset['index']=index;
 
@@ -214,7 +220,7 @@ export class ScheduleItem {
         var dataset=this._dataset;
         var datasets=this._datasets;
 
-        if(index>0&&datasets[index-1].locationType!==dataset.locationType){
+        if(this._visualizer.canHaveTravelTime(index, datasets)){
             var transitEl=item.appendChild(new Element('div', {
                 "class":"transit"
             }));
@@ -222,6 +228,10 @@ export class ScheduleItem {
             var travelDuration=this._duration(datasets[index-1].endTime, dataset.startTime);
             var travelDurationHeight=this._durationToHeight(travelDuration);
             transitEl.style.cssText = '--travelHeight:'+travelDurationHeight+"px;";
+
+
+            
+
         }
 
     }
@@ -237,6 +247,8 @@ export class ScheduleItem {
         item.dataset['duration']=duration;
         
 
+       
+
 
         var durationEl=item.appendChild(new Element('div', {
             "class":"duration"
@@ -250,24 +262,45 @@ export class ScheduleItem {
             "durationHeight":durationHeight+"px"
         });
 
-        if(index>0&&datasets[index-1].locationType!==dataset.locationType){
+        if(this._visualizer.canHaveTravelTime(index, datasets)){
 
             var travelDuration=this._duration(datasets[index-1].endTime, dataset.startTime);
+            var travelDurationHeight=this._durationToHeight(travelDuration);
+            var travelDurationFmt=this._formatDuration(travelDuration);
+
+            
+
+            this._addVars({
+                "travelHeight":travelDurationHeight+"px"
+            });
 
             var travelDurationEl=item.appendChild(new Element('div', {
                 "class":"travel-duration"
             }));
-            var travelDurationHeight=this._durationToHeight(travelDuration);
-            //travelDurationEl.style.cssText = '--travelHeight:'+travelDurationHeight+"px;";
-            this._addVars({
-                "travelHeight":travelDurationHeight+"px"
-            });
+
+            var itemElement=this._visualizer.getItemElement(index);
+            var travelDurationItemEl = itemElement.querySelector('.travel-duration');
+            if(!travelDurationItemEl){
+                var travelDurationItemEl=itemElement.insertBefore(new Element('div', {
+                    "class":"travel-duration"
+                }), itemElement.firstChild);
+
+                travelDurationItemEl.appendChild(new Element('div', {
+                    "class":"transit"
+                }));
+
+            }
+
+            [travelDurationEl, travelDurationItemEl].forEach((el)=>{
             
-
-            travelDurationEl.dataset['travel']=travelDuration;
-            travelDurationEl.dataset['travelHr']=this._formatDuration(travelDuration);
-           
-
+                //travelDurationEl.style.cssText = '--travelHeight:'+travelDurationHeight+"px;";
+                
+                el.dataset['travelStart']=datasets[index-1].endTime;
+                el.dataset['travelEnd']=datasets[index].startTime;
+                el.dataset['travel']=travelDuration;
+                el.dataset['travelHr']=travelDurationFmt;
+            
+            });
         }
 
     }
@@ -413,7 +446,7 @@ export class ScheduleItem {
 
             var endTime=this._visualizer.getItemInput(index, 'endTime');
             endTime.value=this._snapOffsetEnd(dataset.endTime, _d, this._minDuration);
-            this._visualizer.needsRedraw();
+            this._visualizer.needsRedrawOnDragend();
 
             _y=0;
 
