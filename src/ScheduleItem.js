@@ -3,6 +3,8 @@ import  { Calc } from  './Calc.js';
 import  { Element } from  './Element.js';
 import * as dragNdrop from 'npm-dragndrop/src/dragNdrop.js';
 
+import  { BellCurve } from  './helpers/BellCurve.js';
+
 export class ScheduleItem {
 
 	constructor(element, visualizer){
@@ -135,6 +137,7 @@ export class ScheduleItem {
         this._addDurationIndicators();
         this._addActivityLabel();
         this._addDragTimeHandles();
+        this._addProbabilityCurve();
         
         return item;
     }
@@ -281,7 +284,7 @@ export class ScheduleItem {
             var itemElement=this._visualizer.getItemElement(index);
             var travelDurationItemEl = itemElement.querySelector('.travel-duration');
             if(!travelDurationItemEl){
-                var travelDurationItemEl=itemElement.insertBefore(new Element('div', {
+                travelDurationItemEl=itemElement.insertBefore(new Element('div', {
                     "class":"travel-duration"
                 }), itemElement.firstChild);
 
@@ -303,6 +306,68 @@ export class ScheduleItem {
             });
         }
 
+    }
+
+    _getActivityProbability(index, datasets){
+        return this._visualizer.getActivityProbability(index, datasets);
+    }
+
+    _addProbabilityCurve(){
+
+        var item=this._item;
+        var index=this._index;
+        var dataset=this._dataset;
+        var datasets=this._datasets;
+
+
+        var itemElement=this._visualizer.getItemElement(index);
+        var activityProbabilityEl = itemElement.querySelector('.activity-probability');
+
+        let probability;
+        try{
+            probability=this._getActivityProbability(index, datasets);
+        }catch(e){
+            console.error(e);
+        }
+        
+        if(!probability){
+            delete this._bellCurve;
+            if(activityProbabilityEl){
+                itemElement.removeChild(activityProbabilityEl);
+            }
+            return;
+        }
+
+        if(!activityProbabilityEl){
+            activityProbabilityEl=itemElement.appendChild(new Element('div', {
+                "class":"activity-probability"
+            }));
+
+            const b=new BellCurve();
+            this._bellCurve=b;
+            activityProbabilityEl.appendChild(b.getElement());
+            // b.drawBellCurve(probability.p[0], probability.p[1])
+            // b.addPoint(probability.value);
+            // b.addLabel(probability.value, (new Calc()).formatDuration(probability.value));
+            b.addClass(probability.status);
+            return;
+        }
+
+        const b=new BellCurve(activityProbabilityEl.firstChild);
+        this._bellCurve=b;
+        // b.drawBellCurve(probability.p[0], probability.p[1], activityProbabilityEl.firstChild);
+        // b.addPoint(probability.value);
+        // b.addLabel(probability.value, (new Calc()).formatDuration(probability.value));
+        b.addClass(probability.status);
+
+    }
+
+
+    _updateProbability(duration){
+        if(this._bellCurve){
+            // this._bellCurve.addPoint(duration);
+            // this._bellCurve.addLabel(duration, (new Calc()).formatDuration(duration));
+        }
     }
 
     _addActivityLabel(){
@@ -437,6 +502,7 @@ export class ScheduleItem {
                 var _end=this._snapOffsetEnd(dataset.endTime, d, snap);
 
                 this._setDraggingStyles(item, _d, _y, _end);
+                this._updateProbability(currentDuration+_d);
             }
         });
 

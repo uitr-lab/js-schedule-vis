@@ -751,14 +751,65 @@ export class ScheduleVisualizer extends EventEmitter {
             return true;
         }
 
-        if(datasets[index].locationOtherText&&
-            datasets[index-1].locationOtherText!==datasets[index].locationOtherText){
+        if(datasets[index].locationOtherAddress&&
+            datasets[index-1].locationOtherAddress!==datasets[index].locationOtherAddress){
 
             return true;
         }
 
 
+        
+
         return false;
+    }
+    
+    getActivityProbability(index, datasets){
+        const name=this.getActivityName(index, datasets);
+        const formData=this._list.getPage().getFormData();
+        const data= {
+            name:name,
+            p:formData._activity[name].map((f)=>{return parseFloat(f);}),
+            value:this._duration(datasets[index])
+        };
+
+        data.status='ok';
+
+        if(data.value<data.p[0]){
+            data.status='less-than-normal'
+        }
+        if(data.value>data.p[1]){
+            data.status='greator-than-normal'
+        }
+
+        return data;
+    }
+
+    getActivityName(index, datasets){
+        if(!datasets){
+            datasets=this._lastValidDatasets;
+        }
+        const dataset=datasets[index];
+        const formData=this._list.getPage().getFormData();
+        const categories=[
+            'home',
+            'work-school',
+            'other'
+        ];
+
+        const cat=categories[parseInt(dataset.locationType)];
+        const values=formData._config.activity[cat]
+
+        const fields=[
+            'inHomeActivity',
+            'workActivity',
+            'otherActivity'
+        ];
+        const field=fields[parseInt(dataset.locationType)];
+
+        const activity= values[parseInt(dataset[field])];
+        
+        return activity;
+
     }
 
 
