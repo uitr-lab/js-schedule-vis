@@ -84,7 +84,38 @@ export class Calc {
     }
 
 
-    duration(startTime, endTime){
+    delta(startTime, endTime){
+        var _valueOf=(value)=>{
+
+           var h=parseInt(value.split(':').shift());
+           var m=parseInt(value.split(':').pop());
+
+           var num=h*60+m;
+
+           if(isNaN(num)){
+               return 0;
+           }
+
+           return num;
+       }
+
+       var dataset=startTime;
+
+       if(typeof startTime=='string'&&typeof endTime=='string'){
+            dataset={
+                startTime:dataset,
+                endTime:endTime
+            };
+       }
+
+
+       var start=_valueOf(dataset.startTime);
+       var end=_valueOf(dataset.endTime);
+
+       return end-start;
+   }
+
+   duration(startTime, endTime){
         var _valueOf=(value)=>{
 
            var h=parseInt(value.split(':').shift());
