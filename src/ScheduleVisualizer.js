@@ -35,6 +35,7 @@ export class ScheduleVisualizer extends EventEmitter {
         // list.setDatasetKeyFormatter(function(key){
         //    return key.replace(/\d+$/, "") //strip trailing numbers
         // });
+
         this._navigationEnabled=true;
         this._list.autoValidate();
         this._list.on('validation', ()=>{
@@ -46,7 +47,11 @@ export class ScheduleVisualizer extends EventEmitter {
             this._disableNavigation();
         })
         
-        this._list.on('addItem', this._setTimes.bind(this));
+        this._list.on('addItem', (item, index)=>{
+            item=this._checkPrediction(item, index)
+            this._setTimes(item, index);
+        });
+            
         this._list.getItems().forEach(this._setTimes.bind(this));
 
 
@@ -89,6 +94,8 @@ export class ScheduleVisualizer extends EventEmitter {
         
 
 	}
+
+
 
 
     _setTimes(itemEl, index){
@@ -766,6 +773,11 @@ export class ScheduleVisualizer extends EventEmitter {
     getActivityProbability(index, datasets){
         const name=this.getActivityName(index, datasets);
         const formData=this._list.getPage().getFormData();
+
+        if(typeof formData._activity[name] =='undefined'){
+            throw `Missing probability for: ${name}`;
+        }
+
         const data= {
             name:name,
             p:formData._activity[name].map((f)=>{return parseFloat(f);}),
@@ -784,12 +796,12 @@ export class ScheduleVisualizer extends EventEmitter {
         return data;
     }
 
-    getActivityName(index, datasets){
+
+    getActivityLocation(index, datasets){
         if(!datasets){
             datasets=this._lastValidDatasets;
         }
         const dataset=datasets[index];
-        const formData=this._list.getPage().getFormData();
         const categories=[
             'home',
             'work-school',
@@ -797,6 +809,16 @@ export class ScheduleVisualizer extends EventEmitter {
         ];
 
         const cat=categories[parseInt(dataset.locationType)];
+        return cat;
+    }
+
+    getActivityName(index, datasets){
+        if(!datasets){
+            datasets=this._lastValidDatasets;
+        }
+       
+        const cat=this.getActivityLocation(index, datasets);
+        const formData=this._list.getPage().getFormData();
         const values=formData._config.activity[cat]
 
         const fields=[
@@ -804,6 +826,7 @@ export class ScheduleVisualizer extends EventEmitter {
             'workActivity',
             'otherActivity'
         ];
+        const dataset=datasets[index];
         const field=fields[parseInt(dataset.locationType)];
 
         const activity= values[parseInt(dataset[field])];
@@ -853,6 +876,119 @@ export class ScheduleVisualizer extends EventEmitter {
 
     _navigationFailedFeedback(){
         this._list.showErrors();
+        
+    }
+
+
+    _checkPrediction(item, index){
+
+        if(index<1 || !this._prediction){
+            return item;
+        }
+
+        var predictionIndex=index;
+        if(predictionIndex>=this._prediction.length){
+            return item;
+        }
+
+        try{
+
+            var lastPrediction=this._prediction[predictionIndex-1];
+            var thisPrediction=this._prediction[predictionIndex];
+
+            
+
+            var locationType=this.getActivityLocation(index-1);
+            var inputEnd=this.getItemInput(index-1, 'endTime').value;
+            var activity=this.getActivityName(index-1);
+
+            var map={
+                "work":"working",
+                "school":"attending class"
+            };
+            var replacements={
+                        "in-home":"in - home",
+                        'in - home recreation and exercise':'in - home recreation'
+                    };
+
+            var _map=(val)=>{
+                Object.keys(map).forEach((k)=>{
+                    if(val==k){
+                        val=map[k];
+                    }
+                })
+                Object.keys(replacements).forEach((k)=>{
+                    val=val.replace(k, replacements[k]);
+                })
+                return val;
+            };
+
+
+            var lastPredictedActivity=_map(lastPrediction.Activity.split('_').shift().toLowerCase());
+
+            if(activity.toLowerCase().indexOf(lastPredictedActivity)>=0){
+
+                var timeDelta=(new Calc()).delta(lastPrediction.End, inputEnd);
+                if(Math.abs(timeDelta)<120){
+                    //use prediction
+                    console.log('use prediction')
+
+
+                    // merge predicted time with actual time...
+                    timeDelta=timeDelta/2;
+                    if(timeDelta<30){
+                        timeDelta=0
+                    }
+                    
+                   
+                    var predictedActivity=_map(thisPrediction.Activity.split('_').shift().toLowerCase());
+                   
+
+                    const fields=[
+                        'inHomeActivity',
+                        'workActivity',
+                        'otherActivity'
+                    ];
+
+                    for(var i=0;i<fields.length;i++){
+                        var field=fields[i];
+                        var inputActivities=this.getItemInput(index, field);
+                        var options=Array.from(inputActivities.options);
+                        for(var j=0;j<options.length;j++){
+                            var option=options[j]
+                            var value=option.innerText;
+
+                            if(value.toLowerCase().indexOf(predictedActivity)>=0){
+                                console.log('use value');
+                                this.getItemInput(index, 'locationType').value=`${i}`;
+                                inputActivities.value=`${j-1}`;
+
+                                var inputEnd=this.getItemInput(index, 'endTime')
+                                inputEnd.value=this._snapOffsetEnd(thisPrediction.End, timeDelta, 5);
+
+                                return item;
+                            }
+                        }
+                    }
+
+                }
+
+            }
+
+        }catch(e){
+            console.error(e);
+        }
+
+        return item;
+    }
+
+
+
+    setPrediction(data){
+
+        if(data.status=='Ok'){
+            this._prediction=data.response;
+        }
         
     }
 
