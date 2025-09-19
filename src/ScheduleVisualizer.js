@@ -82,8 +82,47 @@ export class ScheduleVisualizer extends EventEmitter {
                     return;
                 }
                 throw {errors:['Need to complete a full day'], fields:['activitySchedule']};
-            })
-        })
+            });
+        });
+
+        this._list.getPage().addValidator((formData, pageData, opts)=>{
+            return new Promise((resolve)=>{
+                if(!this._inputsRequiresUpdate){
+                    this._inputsRequiresUpdate=[];
+                }
+
+                this._inputsRequiresUpdate=this._inputsRequiresUpdate.filter((input)=>{
+                    return document.contains(input);
+                })
+
+                if(this._inputsRequiresUpdate.length==0){
+
+                    this._list.removeValidationErrors('prediction')
+                    resolve();
+                    return;
+                }
+                
+
+                var validationErrors={errors:[], fields:{}}
+                this._inputsRequiresUpdate.forEach((input)=>{
+                        validationErrors.errors.push({
+                            field:input.name,
+                            fieldValue:input.value,
+                            message:'Check prediction',
+                            forceDisplay:true
+                        });
+                        validationErrors.fields[input.name]={
+                            type:"string",
+                            required:true
+                        };
+                });
+
+                this._list.addValidationErrors('prediction',validationErrors)
+                throw validationErrors;
+            });
+        });
+
+
         this._updateSidebar();
         this._formatActivities();
         this.on('update', ()=>{
@@ -873,12 +912,35 @@ export class ScheduleVisualizer extends EventEmitter {
         this._element.classList.add('disable-nav');
     }
 
-
     _navigationFailedFeedback(){
         this._list.showErrors();
         
     }
 
+
+
+    _requireUpdate(input, field){
+
+        if(typeof input=='number'&&field){
+            input=this.getItemInput(input, field);
+        }
+
+        if(!this._inputsRequiresUpdate){
+            this._inputsRequiresUpdate=[];
+        }
+        if(this._inputsRequiresUpdate.indexOf(input)>=0){
+            return;
+        }
+        var listener=()=>{
+             input.removeEventListener('focus', listener);
+             this._inputsRequiresUpdate.splice(this._inputsRequiresUpdate.indexOf(input), 1);
+             this._list.getRenderer().needsUpdateValidation();
+        };
+        input.addEventListener('focus', listener);
+        this._inputsRequiresUpdate.push(input)
+        
+
+    }
 
     _checkPrediction(item, index){
 
@@ -963,8 +1025,14 @@ export class ScheduleVisualizer extends EventEmitter {
                                 this.getItemInput(index, 'locationType').value=`${i}`;
                                 inputActivities.value=`${j-1}`;
 
-                                var inputEnd=this.getItemInput(index, 'endTime')
+                                
+                                var inputEnd=this.getItemInput(index, 'endTime');
                                 inputEnd.value=this._snapOffsetEnd(thisPrediction.End, timeDelta, 5);
+
+                                this._requireUpdate(index, 'endTime');
+                                this._requireUpdate(index, 'locationType');
+                                this._requireUpdate(index, field);
+                            
 
                                 return item;
                             }
